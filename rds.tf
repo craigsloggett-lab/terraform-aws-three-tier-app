@@ -37,9 +37,12 @@ resource "aws_db_instance" "database" {
   backup_retention_period    = var.database.backup_retention_period
   copy_tags_to_snapshot      = true
   auto_minor_version_upgrade = true
-  deletion_protection        = var.database.deletion_protection
-  skip_final_snapshot        = var.database.skip_final_snapshot
-  final_snapshot_identifier  = local.database_final_snapshot_identifier
+  # Defaults to true (variables.tf). Trivy sees false only via examples/public-https,
+  # which disables it so the example destroys cleanly.
+  #trivy:ignore:AWS-0177
+  deletion_protection       = var.database.deletion_protection
+  skip_final_snapshot       = var.database.skip_final_snapshot
+  final_snapshot_identifier = local.database_final_snapshot_identifier
 
   tags = merge(var.tags, { Name = var.database.name })
 }

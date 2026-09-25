@@ -228,7 +228,7 @@ The database SG has no egress rules. Terraform removes the AWS default allow-all
 *Source*: research-edge-cases.md §3.
 *Rejected*: A certificate-status check. `data.aws_acm_certificate` has no `arn` argument in 5.x, so the ARN format is validated instead. Per-subnet AZ checks, which would need a top-level `for_each` data source that turns failures into hard errors.
 
-**Trivy findings handled by inline, justified suppressions**: Four checks fail by design and are suppressed with a justification comment followed by `#trivy:ignore:<ID>` directly above the resource. Both forms were verified to work with Trivy 0.70.0:
+**Trivy findings handled by inline, justified suppressions**: Five checks fail by design and are suppressed with a justification comment followed by `#trivy:ignore:<ID>` directly above the resource (or, for AWS-0177, the attribute). Both forms were verified to work with Trivy 0.70.0:
 
 | Trivy ID | Resource | Justification |
 |---|---|---|
@@ -236,6 +236,7 @@ The database SG has no egress rules. Terraform removes the AWS default allow-all
 | AWS-0054 (CRITICAL) | `aws_lb_listener.http` | It forwards plain HTTP only when the caller supplies no certificate (user-directed, FR-03). With a certificate, it only redirects |
 | AWS-0104 (CRITICAL) | `aws_vpc_security_group_egress_rule.app_https` | User-directed egress for SSM, Secrets Manager and package repositories on 443 only (clarification Q2) |
 | AWS-0052 (HIGH) | `aws_lb.web` | `drop_invalid_header_fields` was not selected by the user. See §7 OQ-1, which should be resolved before release |
+| AWS-0177 (MEDIUM) | `aws_db_instance.database` (`deletion_protection`) | False positive for the module: `database.deletion_protection` defaults to `true`. Trivy evaluates the module through `examples/public-https`, which sets it to `false` so the example destroys cleanly. Added in item H because the repo stop hook fails on MEDIUM (`--severity CRITICAL,HIGH,MEDIUM`) |
 
 Every rule resource sets `description`, which clears AWS-0124.
 *Source*: local Trivy 0.70.0 scan of a design prototype; constitution §5.2.
@@ -1063,7 +1064,7 @@ Items are ordered by dependency. Tests come before resource code (constitution �
   - `README.md`.
 
   Done when `terraform init -backend=false && terraform validate` passes in the example directory.
-- [ ] **H: Acceptance and integration tests, then polish.** Create `tests/acceptance.tftest.hcl` and `tests/integration.tftest.hcl` as specified. Regenerate the root `README.md` with terraform-docs. The Usage block still lifts the unchanged `examples/basic/main.tf`. Run `terraform fmt -check -recursive`, `terraform validate`, `terraform test` (unit files), `tflint --recursive` and `trivy config .`. Done when there are no Critical or High findings beyond the four justified inline suppressions.
+- [x] **H: Acceptance and integration tests, then polish.** Create `tests/acceptance.tftest.hcl` and `tests/integration.tftest.hcl` as specified. Regenerate the root `README.md` with terraform-docs. The Usage block still lifts the unchanged `examples/basic/main.tf`. Run `terraform fmt -check -recursive`, `terraform validate`, `terraform test` (unit files), `tflint --recursive` and `trivy config .`. Done when there are no Critical or High findings beyond the four justified inline suppressions.
 
 ---
 

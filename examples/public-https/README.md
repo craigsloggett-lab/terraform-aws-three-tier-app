@@ -6,7 +6,7 @@ A runnable, self-contained deployment of the three-tier app. It creates a VPC wi
 - An app fleet of 1-2 instances in the private subnets that serves a static page on port 8080.
 - A single-AZ PostgreSQL instance in the database subnets, with the master password in Secrets Manager.
 
-The database uses disposable settings (`deletion_protection = false`, `skip_final_snapshot = true`, one day of backups) so `terraform destroy` removes everything. Keep the module defaults in production.
+The database uses disposable settings (`deletion_protection = false`, `skip_final_snapshot = true`) so `terraform destroy` removes everything. Keep the module defaults in production.
 
 ## Prerequisites
 
@@ -102,11 +102,10 @@ module "three_tier_app" {
 
   # Disposable settings so the example destroys cleanly. Keep the defaults in production.
   database = {
-    name                    = "tta-public-https-db"
-    multi_az                = false
-    backup_retention_period = 1
-    deletion_protection     = false
-    skip_final_snapshot     = true
+    name                = "tta-public-https-db"
+    multi_az            = false
+    deletion_protection = false
+    skip_final_snapshot = true
   }
 }
 ```

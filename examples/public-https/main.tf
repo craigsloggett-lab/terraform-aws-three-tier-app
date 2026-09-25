@@ -72,10 +72,9 @@ module "three_tier_app" {
 
   # Disposable settings so the example destroys cleanly. Keep the defaults in production.
   database = {
-    name                    = "tta-public-https-db"
-    multi_az                = false
-    backup_retention_period = 1
-    deletion_protection     = false
-    skip_final_snapshot     = true
+    name                = "tta-public-https-db"
+    multi_az            = false
+    deletion_protection = false
+    skip_final_snapshot = true
   }
 }
