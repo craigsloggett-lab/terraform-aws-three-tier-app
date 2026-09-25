@@ -1,5 +1,6 @@
-# terraform-module-template
-A GitHub repository template for creating new Terraform module.
+# terraform-aws-three-tier-app
+
+A Terraform module to deploy the infrastructure for a three-tier application on AWS.
 
 <!-- BEGIN_TF_DOCS -->
 ## Usage
@@ -7,9 +8,9 @@ A GitHub repository template for creating new Terraform module.
 ### main.tf
 ```hcl
 # tflint-ignore: terraform_required_version
-module "my_module" {
-  source = "<namespace>/<module>/<provider>"
-  # version = "x.x.x"
+module "three_tier_app" {
+  source  = "app.terraform.io/craigsloggett-lab/three-tier-app/aws"
+  version = "0.0.1"
 }
 ```
 
