@@ -1,3 +1,5 @@
+# Application Load Balancer
+
 # AWS-0053: the web tier is internet-facing by design (FR-02); only the listener ports are open to the internet.
 # AWS-0052: drop_invalid_header_fields was not selected by the user in clarification Q1; see design.md §7 OQ-1 (resolve before release).
 #trivy:ignore:AWS-0053
@@ -11,6 +13,8 @@ resource "aws_lb" "web" {
 
   tags = merge(var.tags, { Name = var.web.name })
 }
+
+# Target Group
 
 resource "aws_lb_target_group" "app" {
   name_prefix = local.target_group_name_prefix
@@ -31,6 +35,8 @@ resource "aws_lb_target_group" "app" {
     create_before_destroy = true
   }
 }
+
+# Listeners
 
 # Plain HTTP is forwarded only when the caller supplies no certificate (user-directed, FR-03); with a certificate this listener only redirects to HTTPS.
 #trivy:ignore:AWS-0054

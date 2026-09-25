@@ -1,3 +1,5 @@
+# Launch Template
+
 resource "aws_launch_template" "app" {
   # The provider requires name_prefix >= 3 characters, but A1/A2 allow a 1-character app.name, so pad that case only.
   name_prefix            = length(var.app.name) < 2 ? "${var.app.name}-lt-" : "${var.app.name}-"

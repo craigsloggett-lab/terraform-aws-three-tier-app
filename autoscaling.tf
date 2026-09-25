@@ -1,3 +1,5 @@
+# Auto Scaling Group
+
 resource "aws_autoscaling_group" "app" {
   name                      = var.app.name
   min_size                  = var.app.min_size

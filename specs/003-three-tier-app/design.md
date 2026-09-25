@@ -1064,7 +1064,7 @@ Items are ordered by dependency. Tests come before resource code (constitution Â
   - `README.md`.
 
   Done when `terraform init -backend=false && terraform validate` passes in the example directory.
-- [x] **H: Acceptance and integration tests, then polish.** Create `tests/acceptance.tftest.hcl` and `tests/integration.tftest.hcl` as specified. Regenerate the root `README.md` with terraform-docs. The Usage block still lifts the unchanged `examples/basic/main.tf`. Run `terraform fmt -check -recursive`, `terraform validate`, `terraform test` (unit files), `tflint --recursive` and `trivy config .`. Done when there are no Critical or High findings beyond the four justified inline suppressions.
+- [x] **H: Acceptance and integration tests, then polish.** Create `tests/acceptance.tftest.hcl` and `tests/integration.tftest.hcl` as specified. Regenerate the root `README.md` with terraform-docs. The Usage block still lifts the unchanged `examples/basic/main.tf`. Run `terraform fmt -check -recursive`, `terraform validate`, `terraform test` (unit files), `tflint --recursive` and `trivy config .`. Done when there are no Critical or High findings beyond the five justified inline suppressions (AWS-0177 added during this item).
 
 ---
 

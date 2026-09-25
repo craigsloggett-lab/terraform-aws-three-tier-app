@@ -1,4 +1,4 @@
-# Security groups (one per tier)
+# Security Groups
 
 resource "aws_security_group" "web" {
   name_prefix = "${var.web.name}-"
@@ -39,7 +39,7 @@ resource "aws_security_group" "database" {
   }
 }
 
-# Web tier rules
+# Web Tier Rules
 
 resource "aws_vpc_security_group_ingress_rule" "web_http" {
   security_group_id = aws_security_group.web.id
@@ -76,7 +76,7 @@ resource "aws_vpc_security_group_egress_rule" "web_to_app" {
   tags = merge(var.tags, { Name = var.web.name })
 }
 
-# App tier rules
+# App Tier Rules
 
 resource "aws_vpc_security_group_ingress_rule" "app_from_web" {
   security_group_id            = aws_security_group.app.id
@@ -115,7 +115,7 @@ resource "aws_vpc_security_group_egress_rule" "app_to_database" {
   tags = merge(var.tags, { Name = var.app.name })
 }
 
-# Data tier rules
+# Data Tier Rules
 
 resource "aws_vpc_security_group_ingress_rule" "database_from_app" {
   count = local.database_enabled ? 1 : 0

@@ -1,3 +1,5 @@
+# Database
+
 resource "aws_db_subnet_group" "database" {
   count = local.database_enabled ? 1 : 0
 
