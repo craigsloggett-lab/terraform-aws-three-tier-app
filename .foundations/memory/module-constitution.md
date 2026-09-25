@@ -1,8 +1,8 @@
 # Terraform Module Development Constitution
 
-**Organization**: [Your Organization Name]
-**Version**: 5.0.0
-**Effective Date**: February 2026
+**Organization**: craigsloggett-lab
+**Version**: 6.0.0
+**Effective Date**: September 2026
 **Purpose**: Non-negotiable principles for enterprise Terraform module development
 **Authority**: This document governs what correct module code looks like. Workflow mechanics live in orchestrator skills. Agent behavior lives in AGENTS.md. If a rule exists here, it is not duplicated elsewhere.
 
@@ -16,8 +16,8 @@ Modules MUST be authored using native Terraform resources from official provider
 
 - Modules MUST expose configurable inputs with secure defaults
 - Consumers MUST get a secure, working baseline without overriding anything
-- Conditional resource creation MUST be supported via boolean variables (`create_*` or `enable_*`)
-- Module versioning MUST follow semantic versioning with CHANGELOG entries
+- Conditional resource creation MUST be driven by the presence of an optional configuration object (`null` disables it); boolean `enable_*` flags only where the feature has nothing to configure
+- Module versioning MUST follow semantic versioning, derived from conventional commit messages by the release workflow
 - Research provider docs and AWS documentation before writing any resource code
 
 ### 1.2 Security-First by Default
@@ -58,18 +58,17 @@ Root modules MUST follow the standard HashiCorp module structure:
 
 ```
 /
-├── main.tf              # Primary resource definitions
-├── variables.tf         # Input variable declarations
+├── main.tf              # Data sources and calls to other modules
+├── <service>.tf         # One file per AWS service: ec2.tf, iam.tf, kms.tf, s3.tf, vpc.tf, ...
+├── locals.tf            # Derived values, each with a comment saying why it exists
+├── check.tf             # check blocks: assertions that need data-source values
+├── variables.tf         # Inputs, grouped under `# Required` then `# Optional`
 ├── outputs.tf           # Output value declarations
-├── locals.tf            # Local value computations
 ├── versions.tf          # Terraform and provider version constraints
-├── data.tf              # Data source definitions (if needed)
 ├── README.md            # Auto-generated via terraform-docs
-├── CHANGELOG.md         # Version history
-├── examples/
-│   ├── basic/           # Minimal usage — provider config lives here
-│   └── complete/        # All features enabled — provider config lives here
-├── modules/             # Submodules (optional)
+├── files/               # Scripts and unit files shipped to instances (shellcheck-clean)
+├── templates/           # .tftpl files rendered with templatefile()
+├── examples/<scenario>/ # One directory per scenario, each a complete root module
 └── tests/               # .tftest.hcl files
 ```
 
@@ -78,17 +77,20 @@ Rules:
 - Root module MUST NOT contain `provider {}` blocks — modules inherit providers from consumers
 - `required_providers` and `required_version` MUST be declared in `versions.tf`
 - Provider configuration (region, credentials) belongs ONLY in `examples/`
-- `examples/basic/` MUST demonstrate minimum viable usage
-- `examples/complete/` MUST demonstrate all features and optional configurations
-- No single file MAY exceed 500 lines
+- Resources MUST be grouped by AWS service, one file per service; `main.tf` holds only data sources and module calls
+- Examples are named by scenario (`examples/self-signed-tls/`), never `basic`/`complete`; at least one MUST exist
+- Every example is self-contained: `providers.tf`, `versions.tf` pinning exact provider versions, its own `.terraform-docs.yml`, and `defaults.auto.tfvars.example`
+- The README Usage section is the first example's `main.tf`, lifted by terraform-docs, so that file MUST read as consumer usage
 - No monolithic configurations — resources MUST be logically grouped
 
 ### 2.2 Naming
 
-- Resources: `this` for single instances (`aws_vpc.this`); descriptive names for multiples (`aws_subnet.public`, `aws_subnet.private`)
-- Variables: `snake_case` with descriptive names
+- Resources: a descriptive noun for every resource, singletons included (`aws_s3_bucket.snapshots`, `aws_security_group.bastion`, `aws_lb.vault_enterprise`); `this` is never used
+- Security group rules: one `aws_vpc_security_group_ingress_rule` or `aws_vpc_security_group_egress_rule` per rule, named `<subject>_<purpose>` (`vault_ssh`, `bastion_ntp`)
+- Data sources: named for what they select (`aws_ami.selected`, `aws_vpc.existing`, `aws_ec2_instance_type.compute`)
+- Variables: `snake_case`; one configuration object per subsystem (`vpc`, `compute`, `bastion`, `ami`, `kms_key`) rather than flat prefixed variables
 - Outputs: `snake_case`, mirroring resource attribute names where possible
-- Boolean toggles: `create_<resource>` or `enable_<feature>`
+- Toggles: the presence of an optional object or field; `enable_<feature>` only when there is nothing to configure
 - Names MUST NOT contain sensitive information (account IDs, secrets, PII)
 - Names MUST be idempotent — no timestamps or random values unless functionally required
 - Prefer `for_each` over `count` for stable resource addresses
@@ -97,15 +99,23 @@ Rules:
 
 Every variable MUST include:
 
-- `description` — purpose and valid values
+- `description` — a sentence ending in a full stop; a `<<-EOT` heredoc when it runs past one line
 - `type` — explicit constraint, never implicit `any`
 - `sensitive = true` — for security-sensitive values
 
-Variables SHOULD include:
+Structured inputs:
 
-- `validation` blocks for business logic constraints
-- Sensible defaults where possible — minimize required inputs
-- Required variables MUST be the minimum needed for a working deployment
+- One `object({...})` per subsystem; every field with a default uses `optional(type, default)` and the object itself defaults to `{}`
+- A sub-object that is absent by default is `optional(object({...}), null)`; its presence is the toggle
+- `nullable` is not used; nulls are handled through `optional()` defaults
+
+Validation:
+
+- Every constraint the module relies on MUST be a `validation` block, one condition per block
+- `error_message` names the variable path and states the rule: `vpc.existing subnet ID lists must be non-empty when existing is set.`
+- Cross-field rules on an object are validated on the object, not in `locals`
+
+Ordering: required variables first under `# Required`, then `# Optional`; required variables MUST be the minimum needed for a working deployment
 
 ### 2.4 Outputs
 
@@ -113,25 +123,29 @@ Variables SHOULD include:
 - Conditional resources MUST use `try()` for graceful null handling:
   ```hcl
   output "vpc_id" {
-    value = try(aws_vpc.this[0].id, null)
+    value = try(aws_vpc.created[0].id, null)
   }
   ```
-- All outputs MUST have `description` for terraform-docs generation
+- All outputs MUST have `description` for terraform-docs generation, a sentence ending in a full stop that says how to use the value where that is not obvious
 
 ### 2.5 Resource Patterns
 
-- Conditional creation via `count` or `for_each` with enable variables
+- `count = <condition> ? 1 : 0` only as a 0/1 toggle; `for_each = toset(<list>)` for fan-out over input values; never `count` for multiples
+- `lifecycle { create_before_destroy = true }` on security groups, launch templates, and anything a running instance references
+- `check` blocks in `check.tf` for assertions that need data-source values (an EBS request against the instance type's baseline); variable `validation` for input shape
 - `merge()` for tags — combine module defaults with consumer-provided tags
-- `try()` and `lookup()` for safely accessing optional nested values
-- `dynamic` blocks for repeatable nested configurations
+- `try()` for safely accessing optional nested values
+- `dynamic` blocks only when the number of nested blocks is input-driven; otherwise write the blocks out
+- `depends_on` only for dependencies that references cannot express
 - MUST NOT hardcode values that consumers should control — expose as variables with defaults
 
 ### 2.6 Code Style
 
 - Follow the [HashiCorp Style Guide](https://developer.hashicorp.com/terraform/language/style)
-- Argument ordering within blocks: required arguments, optional arguments, meta-arguments
+- A Title Case section comment above each logical group of resources (`# Bastion Host`, `# Vault Nodes`), followed by a blank line
+- Block ordering: `count`/`for_each` first then a blank line, arguments, nested blocks, `tags`, `lifecycle`
 - Auto-format with `terraform fmt`
-- Complex logic MUST include inline comments explaining rationale
+- Comments explain why, never what; a comment stays only if removing it would cost the reader something the code cannot say
 - All variables and outputs MUST have descriptions for terraform-docs
 
 ---
@@ -151,24 +165,25 @@ Variables SHOULD include:
 
 These rules apply to all AWS modules. Non-AWS providers MUST add equivalent rules following this pattern.
 
-| Control | Requirement |
-|---------|-------------|
-| Encryption at rest | Enabled by default. MUST NOT be disableable without an explicit variable. |
-| Encryption in transit | Enforced via resource policy or platform default. Document which applies and cite evidence. |
-| Public access | Blocked by default. S3: all four public access block flags `true`. |
-| Security Groups | Deny all by default. Allow only specific required ports and sources. |
-| IAM roles | Specific resource ARNs. No wildcards (`*`) unless unavoidable with documented justification. |
-| S3 force_destroy | Configurable, default `false`. Examples MAY set `true` for testing. |
-| RDS public access | MUST NOT be publicly accessible unless explicitly justified. |
-| EC2 credentials | IAM instance profiles. No embedded credentials. |
-| Lambda permissions | Least-privilege execution roles with specific service permissions. |
+| Control               | Requirement                                                                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Encryption at rest    | Enabled by default. MUST NOT be disableable without an explicit variable.                                                                                      |
+| Encryption in transit | Enforced via resource policy or platform default. Document which applies and cite evidence.                                                                    |
+| Public access         | Blocked by default. S3: all four public access block flags `true`.                                                                                             |
+| Security Groups       | Deny all by default. Allow only specific required ports and sources.                                                                                           |
+| IAM roles             | Specific resource ARNs. No wildcards (`*`) unless unavoidable with documented justification.                                                                   |
+| S3 force_destroy      | Configurable, default `false`. Examples MAY set `true` for testing.                                                                                            |
+| RDS public access     | MUST NOT be publicly accessible unless explicitly justified.                                                                                                   |
+| EC2 credentials       | IAM instance profiles. No embedded credentials.                                                                                                                |
+| EC2 metadata          | `metadata_options` with `http_endpoint = "enabled"`, `http_tokens = "required"`, `http_put_response_hop_limit = 1` on every instance and launch template.      |
+| AMI sourcing          | `data.aws_ami` MUST set `owners` and a `name` filter from variables. `most_recent` without `owners` is forbidden. Image IDs are never hard-coded in resources. |
+| Lambda permissions    | Least-privilege execution roles with specific service permissions.                                                                                             |
 
 ### 3.3 Tagging
 
-- All taggable resources MUST accept a `tags` variable (`map(string)`, default `{}`)
-- Module MUST merge consumer tags with required tags using `merge()`, consumer tags taking precedence
-- Required tags: `Name`, `ManagedBy = "terraform"`
-- Organization-specific required tags (e.g., `Environment`, `CostCenter`, `Owner`) MUST be enforced via required variables or tflint rules
+- Every resource sets `Name` from the `name` field of its configuration object (`tags = { Name = var.bastion.name }`); instances also set `volume_tags`
+- All taggable resources MUST accept a `tags` variable (`map(string)`, default `{}`), merged beneath `Name` with `merge(var.tags, { Name = ... })`
+- Required tag: `Name`. `ManagedBy` and organisation tags (`Environment`, `CostCenter`, `Owner`) come from the consumer's provider `default_tags`, not from the module
 
 ---
 
@@ -178,20 +193,20 @@ These rules apply to all AWS modules. Non-AWS providers MUST add equivalent rule
 
 ```hcl
 terraform {
-  required_version = ">= 1.14"
+  required_version = "~> 1.0"
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"
+      version = "~> 6.0"
     }
   }
 }
 ```
 
-- Modules MUST declare `required_version` with a minimum Terraform version
-- Provider versions MUST use `>=` in modules (not `~>`) to maximize consumer compatibility
-- Use the minimum version that supports required features — do not over-constrain
+- Modules MUST use pessimistic constraints: `~> 1.0` for Terraform, raised to the minor a feature needs (`~> 1.14`), and `~> MAJOR.0` for providers
+- A provider major bump is a deliberate, tested change and a major release of the module; `>= 5.0, < 6.0` is the same constraint spelled long and is acceptable
+- Examples and root modules pin exact provider versions (`6.64.0`); Dependabot moves them
 - MUST NOT use `latest` or unconstrained versions
 
 ### 4.2 State Management
@@ -204,7 +219,8 @@ terraform {
 
 - Semantic versioning: major (breaking interface changes), minor (new features/variables/outputs), patch (bug fixes/docs/security patches)
 - Git tags MUST use `v` prefix: `v1.0.0`
-- Release requires: all tests pass, examples deploy and destroy cleanly, documentation current, CHANGELOG updated
+- Releases are cut by the release workflow on merge to the default branch, with the version derived from conventional commit subjects: `feat` is minor, `fix` is patch, a `!` or `BREAKING CHANGE` footer is major
+- Release requires: all tests pass, examples deploy and destroy cleanly, documentation current
 
 ---
 
@@ -259,7 +275,8 @@ Each test file maps to a category and scenario group in `design.md` Section 5.
 
 - Direct commits to `main` PROHIBITED
 - All changes MUST be made via feature branches
-- Pull requests with human review REQUIRED for all merges
+- Pull requests with human review REQUIRED for all merges; squash merge only, so the PR title is the commit subject on the default branch
+- PR titles and commit subjects are conventional commits with a capitalised subject and no trailing full stop: `feat: Add flow log retention`
 - MUST NOT commit secrets, credentials, or sensitive data
 - Test values for examples managed via `*.tfvars` files, not hardcoded in module code
 
@@ -295,7 +312,7 @@ All four workflow phases are mandatory and sequential. Between phases:
 ### 7.2 Observability
 
 - Modules SHOULD enable monitoring by default where applicable
-- Tags MUST include `Name` and `ManagedBy = "terraform"` at minimum
+- Tags MUST include `Name` at minimum; `ManagedBy` comes from the consumer's `default_tags`
 - Modules SHOULD output critical resource identifiers for monitoring integration
 - Logging resources SHOULD be created by default with opt-out variables
 

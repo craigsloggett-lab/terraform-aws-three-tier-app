@@ -250,7 +250,7 @@ Each case becomes a `run` block with `command = plan` and an assert that the rel
 - [ ] **A: Scaffold** -- Create file structure, versions.tf, all variables, locals, base resource, core outputs
 - [ ] **B: Security core** -- {encryption, access controls, policy -- whatever is security-critical}
 - [ ] **C: Feature set** -- {remaining resources, conditional creation}
-- [ ] **D: Examples** -- examples/basic/ and examples/complete/
+- [ ] **D: Examples** -- one scenario-named example per constitution §2.1, each a complete root module
 - [ ] **E: Tests** -- unit (.tftest.hcl with mock providers), acceptance (plan with real providers), integration (apply with real providers)
 - [ ] **F: Polish** -- README (terraform-docs), formatting, validation, security scan
 
