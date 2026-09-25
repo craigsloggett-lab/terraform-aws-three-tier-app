@@ -1,0 +1,29 @@
+formatter: markdown table
+
+recursive:
+  enabled: false
+
+content: |-
+  ## Usage
+
+  ### main.tf
+  ```hcl
+  {{ include "examples/basic/main.tf" }}
+  ```
+
+  {{ .Requirements }}
+
+  {{ .Providers }}
+
+  {{ .Inputs }}
+
+  {{ .Resources }}
+
+  {{ .Outputs }}
+
+output:
+  file: README.md
+  mode: inject
+
+settings:
+  lockfile: false
